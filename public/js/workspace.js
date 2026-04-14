@@ -234,6 +234,83 @@ const Workspace = (() => {
     }).join('');
   }
 
+  // ── Email Autocomplete ──
+  let searchTimeout = null;
+
+  function initAutocomplete() {
+    const input = document.getElementById('invite-email');
+    if (!input) return;
+
+    input.addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      const q = input.value.trim();
+      if (q.length < 2) {
+        hideAutocomplete();
+        return;
+      }
+      searchTimeout = setTimeout(() => searchUsers(q), 300);
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') hideAutocomplete();
+    });
+
+    // Close on outside click
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#invite-autocomplete') && e.target.id !== 'invite-email') {
+        hideAutocomplete();
+      }
+    });
+  }
+
+  async function searchUsers(query) {
+    try {
+      const users = await API.auth.searchUsers(query);
+      renderAutocomplete(users);
+    } catch(e) {
+      hideAutocomplete();
+    }
+  }
+
+  function renderAutocomplete(users) {
+    let container = document.getElementById('invite-autocomplete');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'invite-autocomplete';
+      container.className = 'autocomplete-dropdown';
+      const parent = document.getElementById('invite-email').parentElement;
+      parent.style.position = 'relative';
+      parent.appendChild(container);
+    }
+
+    if (!users || users.length === 0) {
+      container.innerHTML = '<div class="autocomplete-dropdown__empty">No users found</div>';
+      container.classList.remove('hidden');
+      return;
+    }
+
+    container.innerHTML = users.map(u => `
+      <button class="autocomplete-dropdown__item" onclick="Workspace.selectUser('${escapeHtml(u.email)}'); event.preventDefault();">
+        <div class="autocomplete-dropdown__avatar">${(u.name || 'U')[0].toUpperCase()}</div>
+        <div>
+          <div class="autocomplete-dropdown__name">${escapeHtml(u.name)}</div>
+          <div class="autocomplete-dropdown__email">${escapeHtml(u.email)}</div>
+        </div>
+      </button>
+    `).join('');
+    container.classList.remove('hidden');
+  }
+
+  function hideAutocomplete() {
+    const container = document.getElementById('invite-autocomplete');
+    if (container) container.classList.add('hidden');
+  }
+
+  function selectUser(email) {
+    document.getElementById('invite-email').value = email;
+    hideAutocomplete();
+  }
+
   async function inviteMember() {
     const email = document.getElementById('invite-email').value.trim();
     const role = document.getElementById('invite-role').value;
@@ -245,13 +322,13 @@ const Workspace = (() => {
 
     try {
       await API.workspaces.addMember(activeWorkspace.id, { email, role });
-      // Reload workspace detail to get updated member list
       const detail = await API.workspaces.getById(activeWorkspace.id);
       const idx = workspaces.findIndex(w => w.id === activeWorkspace.id);
       if (idx !== -1) workspaces[idx] = { ...workspaces[idx], ...detail };
       activeWorkspace = workspaces[idx];
 
       document.getElementById('invite-email').value = '';
+      hideAutocomplete();
       renderMembersList();
       Toast.show(`Invited ${email} as ${role}`, 'success');
     } catch (err) {
@@ -311,7 +388,7 @@ const Workspace = (() => {
   return {
     init, toggleDropdown, select,
     showCreateModal, showEditModal, hideCreateModal, saveWorkspace,
-    showMembersModal, hideMembersModal, inviteMember,
+    showMembersModal, hideMembersModal, inviteMember, initAutocomplete, selectUser,
     updateMemberRole, removeMember, deleteWorkspace,
     getActive, getActiveId
   };

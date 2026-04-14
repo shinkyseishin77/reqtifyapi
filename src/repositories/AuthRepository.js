@@ -18,8 +18,23 @@ const findUserById = async (id) => {
   });
 };
 
+const searchByEmail = async (query, excludeUserId = null) => {
+  const where = {
+    email: { contains: query }
+  };
+  if (excludeUserId) {
+    where.id = { not: excludeUserId };
+  }
+  return prisma.user.findMany({
+    where,
+    select: { id: true, name: true, email: true },
+    take: 10,
+  });
+};
+
 module.exports = {
   createUser,
   findUserByEmail,
-  findUserById
+  findUserById,
+  searchByEmail
 };

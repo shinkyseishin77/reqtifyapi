@@ -56,6 +56,7 @@ const API = (() => {
       login: (email, password) => request('POST', '/auth/login', { email, password }),
       register: (email, password, name) => request('POST', '/auth/register', { email, password, name }),
       getMe: () => request('GET', '/auth/me'),
+      searchUsers: (q) => request('GET', `/auth/search?q=${encodeURIComponent(q)}`),
     },
     workspaces: {
       list: () => request('GET', '/workspaces'),
@@ -73,6 +74,7 @@ const API = (() => {
       getById: (id) => request('GET', `/collections/${id}`),
       update: (id, data) => request('PUT', `/collections/${id}`, data),
       delete: (id) => request('DELETE', `/collections/${id}`),
+      importPostman: (data) => request('POST', '/collections/import', data),
     },
     requests: {
       create: (data) => request('POST', '/requests', data),

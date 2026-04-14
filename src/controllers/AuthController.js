@@ -52,8 +52,21 @@ const getMe = async (req, res, next) => {
   }
 }
 
+const searchUsers = async (req, res, next) => {
+  try {
+    const AuthRepository = require('../repositories/AuthRepository');
+    const q = req.query.q || '';
+    if (q.length < 2) return success(res, [], 'Search requires at least 2 characters');
+    const users = await AuthRepository.searchByEmail(q, req.user.id);
+    return success(res, users, 'Users found');
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   register,
   login,
-  getMe
+  getMe,
+  searchUsers
 };

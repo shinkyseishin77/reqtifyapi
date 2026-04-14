@@ -83,6 +83,17 @@
 
     <div class="topbar__spacer"></div>
 
+    <!-- Theme Selector -->
+    <div class="topbar__action" onclick="Theme.toggle()" title="Change Theme" style="position:relative;">
+      <span>🎨</span>
+      <div class="dropdown hidden" id="theme-dropdown" style="right:0; left:auto; min-width:160px;">
+        <div class="dropdown__header">Theme</div>
+        <button class="dropdown__item theme-option" data-theme="default" onclick="Theme.applyTheme('default'); event.stopPropagation();">🎨 Default</button>
+        <button class="dropdown__item theme-option" data-theme="midnight" onclick="Theme.applyTheme('midnight'); event.stopPropagation();">🌙 Midnight</button>
+        <button class="dropdown__item theme-option" data-theme="ocean" onclick="Theme.applyTheme('ocean'); event.stopPropagation();">🌊 Ocean</button>
+      </div>
+    </div>
+
     <!-- User Menu -->
     <div class="topbar__user" title="Logged in">
       <div class="topbar__avatar" id="user-avatar">U</div>
@@ -107,6 +118,7 @@
       <div class="sidebar__panel sidebar__panel--active" data-panel="collections">
         <div class="sidebar__toolbar">
           <input type="text" class="sidebar__search" placeholder="Search collections..." id="collection-search" oninput="filterCollections(this.value)">
+          <button class="sidebar__btn" onclick="ImportPostman.showModal()" title="Import Postman Collection">📥</button>
           <button class="sidebar__btn" onclick="Collections.showCreateModal()" title="New Collection">＋</button>
         </div>
         <div class="sidebar__list" id="collection-list">
@@ -453,6 +465,34 @@
     <div class="modal-box__footer">
       <button class="btn btn--secondary" onclick="document.getElementById('save-request-modal').classList.add('modal-overlay--hidden')">Cancel</button>
       <button class="btn btn--primary" onclick="RequestBuilder.confirmSaveRequest()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import Postman Collection Modal -->
+<div class="modal-overlay modal-overlay--hidden" id="import-modal">
+  <div class="modal-box">
+    <div class="modal-box__header">
+      <h2 class="modal-box__title">📥 Import Postman Collection</h2>
+      <button class="modal-box__close" onclick="ImportPostman.hideModal()">×</button>
+    </div>
+    <div class="modal-box__body">
+      <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">
+        Upload a Postman Collection v2.1 JSON file. All requests, headers, body, and folders will be imported.
+      </p>
+      <div class="import-dropzone" onclick="document.getElementById('import-file').click()">
+        <div class="import-dropzone__icon">📁</div>
+        <div class="import-dropzone__text">Click to select a <strong>.json</strong> file</div>
+        <div class="import-dropzone__hint">Postman Collection v2.1 format</div>
+        <input type="file" id="import-file" accept=".json" style="display:none;" onchange="ImportPostman.handleFile(this)">
+      </div>
+
+      <!-- Preview -->
+      <div id="import-preview" class="hidden" style="margin-top:12px;"></div>
+    </div>
+    <div class="modal-box__footer">
+      <button class="btn btn--secondary" onclick="ImportPostman.hideModal()">Cancel</button>
+      <button class="btn btn--primary" id="btn-import-confirm" disabled onclick="ImportPostman.confirmImport()">Import</button>
     </div>
   </div>
 </div>

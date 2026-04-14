@@ -175,22 +175,164 @@ function initKeyboardShortcuts() {
     }
   });
 }
+// ── Theme System ──
+const Theme = (() => {
+  const COOKIE_KEY = 'reqtify_theme';
+  const themes = ['default', 'midnight', 'ocean'];
+
+  function getCookie(name) {
+    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return match ? match[2] : null;
+  }
+
+  function setCookie(name, value, days = 365) {
+    const d = new Date();
+    d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+    document.cookie = `${name}=${value}; expires=${d.toUTCString()}; path=/; SameSite=Lax`;
+  }
+
+  function init() {
+    const saved = getCookie(COOKIE_KEY) || 'default';
+    applyTheme(saved);
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    setCookie(COOKIE_KEY, theme);
+    document.querySelectorAll('.theme-option').forEach(btn => {
+      btn.classList.toggle('theme-option--active', btn.dataset.theme === theme);
+    });
+  }
+
+  function toggle() {
+    const dropdown = document.getElementById('theme-dropdown');
+    if (dropdown) {
+      dropdown.classList.toggle('hidden');
+      setTimeout(() => {
+        document.addEventListener('click', () => dropdown.classList.add('hidden'), { once: true });
+      }, 10);
+    }
+  }
+
+  return { init, applyTheme, toggle };
+})();
+window.Theme = Theme;
+
+// ── Import Postman Collection ──
+const ImportPostman = (() => {
+  function showModal() {
+    document.getElementById('import-modal').classList.remove('modal-overlay--hidden');
+    document.getElementById('import-file').value = '';
+    document.getElementById('import-preview').innerHTML = '';
+    document.getElementById('import-preview').classList.add('hidden');
+    document.getElementById('btn-import-confirm').disabled = true;
+  }
+
+  function hideModal() {
+    document.getElementById('import-modal').classList.add('modal-overlay--hidden');
+  }
+
+  function handleFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.json')) {
+      Toast.show('Please select a JSON file', 'error');
+      input.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (!data.info || !data.item) {
+          Toast.show('Invalid Postman Collection format', 'error');
+          return;
+        }
+
+        const preview = document.getElementById('import-preview');
+        const reqCount = countRequests(data.item);
+        const folderCount = countFolders(data.item);
+
+        preview.innerHTML = `
+          <div class="import-preview__card">
+            <div class="import-preview__title">📦 ${escapeHtml(data.info.name)}</div>
+            <div class="import-preview__meta">
+              ${data.info.description ? `<div>${escapeHtml(typeof data.info.description === 'string' ? data.info.description.substring(0, 100) : '')}</div>` : ''}
+              <div style="margin-top:8px; display:flex; gap:16px;">
+                <span>📂 ${folderCount} folders</span>
+                <span>📄 ${reqCount} requests</span>
+              </div>
+            </div>
+          </div>
+        `;
+        preview.classList.remove('hidden');
+        document.getElementById('btn-import-confirm').disabled = false;
+        preview.dataset.importData = e.target.result;
+      } catch (err) {
+        Toast.show('Failed to parse JSON: ' + err.message, 'error');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function countRequests(items) {
+    let count = 0;
+    for (const item of items) {
+      if (item.item) count += countRequests(item.item);
+      else if (item.request) count++;
+    }
+    return count;
+  }
+
+  function countFolders(items) {
+    let count = 0;
+    for (const item of items) {
+      if (item.item) { count++; count += countFolders(item.item); }
+    }
+    return count;
+  }
+
+  async function confirmImport() {
+    const preview = document.getElementById('import-preview');
+    const rawData = preview.dataset.importData;
+    if (!rawData) return;
+
+    const btn = document.getElementById('btn-import-confirm');
+    btn.disabled = true;
+    btn.textContent = 'Importing...';
+
+    try {
+      const data = JSON.parse(rawData);
+      const result = await API.collections.importPostman({
+        workspaceId: Workspace.getActiveId(),
+        data,
+      });
+
+      Toast.show(`Imported: ${result.importedRequests} requests, ${result.importedFolders} folders`, 'success');
+      hideModal();
+      Collections.load(Workspace.getActiveId());
+    } catch (err) {
+      Toast.show('Import failed: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Import';
+    }
+  }
+
+  return { showModal, hideModal, handleFile, confirmImport };
+})();
+window.ImportPostman = ImportPostman;
 
 // ── Init ──
 document.addEventListener('DOMContentLoaded', () => {
-  // Init editors
+  Theme.init();
   RequestBuilder.initEditor();
   ResponseViewer.initEditor();
-
-  // Init splitter
   initSplitter();
-
-  // Init keyboard shortcuts
   initKeyboardShortcuts();
-
-  // Init tab bar
   Tabs.renderTabBar();
-
-  // Init auth
+  Workspace.initAutocomplete();
   Auth.init();
 });
