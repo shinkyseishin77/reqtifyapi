@@ -1,0 +1,110 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("user") // "admin" or "user"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspaceMembers WorkspaceMember[]
+  histories        History[]
+}
+
+model Workspace {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members      WorkspaceMember[]
+  collections  Collection[]
+  environments Environment[]
+  histories    History[]
+}
+
+model WorkspaceMember {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  workspaceId Int
+  role        String   @default("viewer") // "owner", "editor", "viewer"
+  joinedAt    DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+}
+
+model Collection {
+  id          Int      @id @default(autoincrement())
+  name        String
+  workspaceId Int
+  parentId    Int?     // For sub-folders
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent    Collection? @relation("FolderHierarchy", fields: [parentId], references: [id])
+  children  Collection[] @relation("FolderHierarchy")
+  requests  Request[]
+}
+
+model Request {
+  id               Int      @id @default(autoincrement())
+  name             String
+  method           String   @default("GET")
+  url              String   @db.Text
+  query            String?  @db.Text       // JSON string of query params
+  headers          String?  @db.Text       // JSON string of headers
+  body             String?  @db.LongText   // JSON string or raw text
+  bodyType         String?  @default("raw")// "raw", "form-data", "urlencoded"
+  auth             String?  @db.Text       // JSON string of auth config
+  preRequestScript String?  @db.Text
+  testScript       String?  @db.Text
+  collectionId     Int
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+}
+
+model Environment {
+  id          Int      @id @default(autoincrement())
+  name        String
+  variables   String   @db.Text // JSON string of variables
+  workspaceId Int?     // If null, it's a global environment
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model History {
+  id           Int      @id @default(autoincrement())
+  url          String   @db.Text
+  method       String
+  status       Int?
+  responseTime Int?     // in ms
+  responseSize Int?     // in bytes
+  bodyPreview  String?  @db.Text
+  userId       Int
+  workspaceId  Int
+  createdAt    DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}

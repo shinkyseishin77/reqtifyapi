@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Postman Alternative — API Testing Tool</title>
+    <meta name="description" content="A powerful, full-featured API testing tool built as a Postman alternative.">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/darcula.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<!-- ═══════════════════════════════ AUTH MODAL ═══════════════════════════════ -->
+<div class="modal-overlay" id="auth-modal">
+  <div class="modal-box">
+    <div class="modal-box__header">
+      <h1 class="modal-box__title" id="auth-modal-title">Welcome Back</h1>
+    </div>
+    <div class="modal-box__body">
+      <div id="auth-register-fields" class="hidden">
+        <div class="form-group">
+          <label for="auth-name">Name</label>
+          <input type="text" id="auth-name" class="form-input" placeholder="Your name">
+        </div>
+      </div>
+      <div id="auth-login-fields">
+        <div class="form-group">
+          <label for="auth-email">Email</label>
+          <input type="email" id="auth-email" class="form-input" placeholder="you@email.com">
+        </div>
+        <div class="form-group">
+          <label for="auth-password">Password</label>
+          <input type="password" id="auth-password" class="form-input" placeholder="••••••••">
+        </div>
+      </div>
+      <div id="auth-error" class="form-error"></div>
+      <div id="auth-toggle" style="margin-top:12px; font-size:12px; color:var(--text-secondary);">
+        Don't have an account? <a href="#" onclick="Auth.toggleAuthMode(); return false;" style="color:var(--accent-primary);">Register</a>
+      </div>
+    </div>
+    <div class="modal-box__footer">
+      <button class="btn btn--primary" id="auth-login-btn" onclick="Auth.handleSubmit('login')">Login</button>
+      <button class="btn btn--primary hidden" id="auth-register-btn" onclick="Auth.handleSubmit('register')">Create Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ APP LAYOUT ═══════════════════════════════ -->
+<div id="app-layout" class="hidden">
+
+  <!-- ──────── TOP BAR ──────── -->
+  <header class="topbar">
+    <div class="topbar__logo">
+      <div class="topbar__logo-icon">⚡</div>
+      <span>ApiFlare</span>
+    </div>
+
+    <div class="topbar__divider"></div>
+
+    <!-- Workspace Selector -->
+    <div class="topbar__workspace-select" onclick="Workspace.toggleDropdown()">
+      <span>📁</span>
+      <span class="topbar__workspace-name" id="workspace-name">Loading...</span>
+      <span style="font-size:10px;">▼</span>
+      <div class="dropdown hidden" id="workspace-dropdown"></div>
+    </div>
+
+    <!-- Environment Selector -->
+    <div class="topbar__env-select" onclick="Environments.toggleDropdown()" style="position:relative;">
+      <span>🌐</span>
+      <span id="env-selector-text">No Environment</span>
+      <span style="font-size:10px;">▼</span>
+      <div class="dropdown hidden" id="env-dropdown"></div>
+    </div>
+
+    <div class="topbar__spacer"></div>
+
+    <!-- User Menu -->
+    <div class="topbar__user" onclick="Auth.logout()" title="Logout">
+      <div class="topbar__avatar">U</div>
+      <span>Logout</span>
+    </div>
+  </header>
+
+  <!-- ──────── SIDEBAR ──────── -->
+  <aside class="sidebar">
+    <!-- Sidebar Tabs -->
+    <div class="sidebar__tabs">
+      <button class="sidebar__tab sidebar__tab--active" data-tab="collections" onclick="switchSidebarTab('collections')">Collections</button>
+      <button class="sidebar__tab" data-tab="environments" onclick="switchSidebarTab('environments')">Envs</button>
+      <button class="sidebar__tab" data-tab="history" onclick="switchSidebarTab('history')">History</button>
+    </div>
+
+    <div class="sidebar__content">
+      <!-- Collections Panel -->
+      <div class="sidebar__panel sidebar__panel--active" data-panel="collections">
+        <div class="sidebar__toolbar">
+          <input type="text" class="sidebar__search" placeholder="Search collections..." id="collection-search" oninput="filterCollections(this.value)">
+          <button class="sidebar__btn" onclick="Collections.showCreateModal()" title="New Collection">＋</button>
+        </div>
+        <div class="sidebar__list" id="collection-list">
+          <div class="empty-state"><div class="loading-spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- Environments Panel -->
+      <div class="sidebar__panel" data-panel="environments">
+        <div class="sidebar__toolbar">
+          <span style="flex:1; font-size:12px; font-weight:500;">Environments</span>
+          <button class="sidebar__btn" onclick="Environments.showCreateModal()" title="New Environment">＋</button>
+        </div>
+        <div class="sidebar__list" id="env-list">
+          <div class="empty-state"><div class="loading-spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- History Panel -->
+      <div class="sidebar__panel" data-panel="history">
+        <div class="sidebar__toolbar">
+          <span style="flex:1; font-size:12px; font-weight:500;">History</span>
+          <button class="sidebar__btn" onclick="History.clearAll()" title="Clear History" style="font-size:11px;">🗑</button>
+        </div>
+        <div class="sidebar__list" id="history-list">
+          <div class="empty-state"><div class="loading-spinner"></div></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ──────── MAIN AREA ──────── -->
+  <main class="main-area">
+    <!-- Tab Bar -->
+    <div class="tab-bar" id="tab-bar">
+      <button class="tab-bar__new" onclick="Tabs.newTab()" title="New Request (Ctrl+N)">＋</button>
+    </div>
+
+    <!-- Welcome Screen (no tabs) -->
+    <div class="welcome-screen" id="welcome-screen">
+      <div class="welcome-screen__icon">⚡</div>
+      <div class="welcome-screen__title">ApiFlare</div>
+      <div style="color:var(--text-muted); font-size:13px;">Lightweight & powerful API testing</div>
+      <div class="welcome-screen__shortcuts">
+        <div class="welcome-screen__shortcut">
+          <kbd>Ctrl + N</kbd> New Request
+        </div>
+        <div class="welcome-screen__shortcut">
+          <kbd>Ctrl + Enter</kbd> Send Request
+        </div>
+        <div class="welcome-screen__shortcut">
+          <kbd>Ctrl + S</kbd> Save Request
+        </div>
+      </div>
+      <button class="btn btn--primary" onclick="Tabs.newTab()" style="margin-top:20px;">New Request</button>
+    </div>
+
+    <!-- Request Pane (hidden when no tabs) -->
+    <div class="request-pane hidden" id="request-pane">
+      <!-- Request Builder -->
+      <div class="request-builder" id="request-builder-area" style="flex: 1;">
+        <!-- URL Bar -->
+        <div class="url-bar">
+          <select id="req-method" class="url-bar__method" onchange="RequestBuilder.updateMethodColor(); Tabs.markUnsaved(); Tabs.updateActiveTabName(null, this.value);">
+            <option value="GET" style="color:var(--method-get);">GET</option>
+            <option value="POST" style="color:var(--method-post);">POST</option>
+            <option value="PUT" style="color:var(--method-put);">PUT</option>
+            <option value="DELETE" style="color:var(--method-delete);">DELETE</option>
+            <option value="PATCH" style="color:var(--method-patch);">PATCH</option>
+            <option value="OPTIONS" style="color:var(--method-options);">OPTIONS</option>
+            <option value="HEAD" style="color:var(--method-head);">HEAD</option>
+          </select>
+          <input type="text" id="req-url" class="url-bar__input" placeholder="Enter request URL or paste curl..." oninput="Tabs.markUnsaved()">
+          <button id="btn-send" class="url-bar__send" onclick="RequestBuilder.sendRequest()">Send</button>
+          <button class="url-bar__save" onclick="RequestBuilder.saveRequest()">Save</button>
+        </div>
+
+        <!-- Config Tabs -->
+        <div class="config-tabs">
+          <button class="config-tab config-tab--active" data-tab="params" onclick="RequestBuilder.switchConfigTab('params')">Params</button>
+          <button class="config-tab" data-tab="headers" onclick="RequestBuilder.switchConfigTab('headers')">Headers</button>
+          <button class="config-tab" data-tab="auth" onclick="RequestBuilder.switchConfigTab('auth')">Authorization</button>
+          <button class="config-tab" data-tab="body" onclick="RequestBuilder.switchConfigTab('body')">Body</button>
+        </div>
+
+        <!-- Config Panels -->
+        <div class="config-panels">
+          <!-- Params Panel -->
+          <div class="config-panel config-panel--active" id="config-params">
+            <table class="kv-table">
+              <thead><tr><th class="kv-table__check"></th><th>Key</th><th>Value</th><th class="kv-table__action"></th></tr></thead>
+              <tbody id="params-table-body">
+                <tr>
+                  <td class="kv-table__check"><input type="checkbox" checked></td>
+                  <td><input type="text" placeholder="Key"></td>
+                  <td><input type="text" placeholder="Value"></td>
+                  <td class="kv-table__action"><button class="kv-remove-btn" onclick="this.closest('tr').remove()">×</button></td>
+                </tr>
+              </tbody>
+            </table>
+            <button class="kv-add-btn" onclick="RequestBuilder.addKVRow('params-table-body')">+ Add Parameter</button>
+          </div>
+
+          <!-- Headers Panel -->
+          <div class="config-panel" id="config-headers">
+            <table class="kv-table">
+              <thead><tr><th class="kv-table__check"></th><th>Key</th><th>Value</th><th class="kv-table__action"></th></tr></thead>
+              <tbody id="headers-table-body">
+                <tr>
+                  <td class="kv-table__check"><input type="checkbox" checked></td>
+                  <td><input type="text" placeholder="Key"></td>
+                  <td><input type="text" placeholder="Value"></td>
+                  <td class="kv-table__action"><button class="kv-remove-btn" onclick="this.closest('tr').remove()">×</button></td>
+                </tr>
+              </tbody>
+            </table>
+            <button class="kv-add-btn" onclick="RequestBuilder.addKVRow('headers-table-body')">+ Add Header</button>
+          </div>
+
+          <!-- Auth Panel -->
+          <div class="config-panel" id="config-auth">
+            <div class="auth-config">
+              <select id="auth-type-select" onchange="RequestBuilder.updateAuthFields(this.value); Tabs.markUnsaved();">
+                <option value="none">No Auth</option>
+                <option value="bearer">Bearer Token</option>
+                <option value="basic">Basic Auth</option>
+              </select>
+              <div id="auth-bearer-fields" class="hidden">
+                <div class="auth-config__field">
+                  <label>Token</label>
+                  <input type="text" id="auth-bearer-token" placeholder="Enter your token" oninput="Tabs.markUnsaved()">
+                </div>
+              </div>
+              <div id="auth-basic-fields" class="hidden">
+                <div class="auth-config__field">
+                  <label>Username</label>
+                  <input type="text" id="auth-basic-user" placeholder="Username" oninput="Tabs.markUnsaved()">
+                </div>
+                <div class="auth-config__field">
+                  <label>Password</label>
+                  <input type="password" id="auth-basic-pass" placeholder="Password" oninput="Tabs.markUnsaved()">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Body Panel -->
+          <div class="config-panel" id="config-body">
+            <div class="body-config">
+              <div class="body-config__type">
+                <label><input type="radio" name="bodyType" value="raw" checked> raw</label>
+                <label><input type="radio" name="bodyType" value="none"> none</label>
+              </div>
+              <div class="body-config__editor">
+                <textarea id="req-body-editor"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Splitter -->
+      <div class="splitter" id="pane-splitter"></div>
+
+      <!-- Response Pane -->
+      <div class="response-pane" id="response-pane">
+        <!-- Empty state -->
+        <div class="empty-state" id="response-empty">
+          <div class="empty-state__icon">📬</div>
+          <div class="empty-state__text">Enter a URL and click Send to get a response</div>
+          <div class="empty-state__sub">Or press Ctrl + Enter</div>
+        </div>
+
+        <!-- Response content (hidden initially) -->
+        <div class="hidden" id="response-content">
+          <!-- Response Header -->
+          <div class="response-header" id="response-meta">
+            <span class="response-header__title">Response</span>
+            <div class="response-meta">
+              <span class="response-meta__item">Status: <span class="response-meta__status response-meta__status--success" id="res-status">200 OK</span></span>
+              <span class="response-meta__item">Time: <span class="response-meta__value" id="res-time" style="color:var(--status-success);">0 ms</span></span>
+              <span class="response-meta__item">Size: <span class="response-meta__value" id="res-size">0 B</span></span>
+            </div>
+          </div>
+
+          <!-- Response Tabs -->
+          <div class="response-tabs">
+            <button class="response-tab response-tab--active" data-tab="res-body" onclick="ResponseViewer.switchResponseTab('res-body')">Body</button>
+            <button class="response-tab" data-tab="res-headers" onclick="ResponseViewer.switchResponseTab('res-headers')">Headers</button>
+          </div>
+
+          <!-- Response Body -->
+          <div class="response-body" id="res-body-panel">
+            <button class="response-body__copy" onclick="ResponseViewer.copyResponse()">Copy</button>
+            <textarea id="res-body-editor"></textarea>
+          </div>
+
+          <!-- Response Headers -->
+          <div class="hidden" id="res-headers-panel" style="padding: 12px 16px; overflow-y: auto; flex: 1;">
+            <div id="res-headers-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ═══════════════════════════════ MODALS ═══════════════════════════════ -->
+
+<!-- Workspace Create Modal -->
+<div class="modal-overlay modal-overlay--hidden" id="workspace-modal">
+  <div class="modal-box">
+    <div class="modal-box__header">
+      <h2 class="modal-box__title" id="workspace-modal-title">New Workspace</h2>
+      <button class="modal-box__close" onclick="Workspace.hideCreateModal()">×</button>
+    </div>
+    <div class="modal-box__body">
+      <div class="form-group">
+        <label for="ws-name">Name</label>
+        <input type="text" id="ws-name" class="form-input" placeholder="Workspace name">
+      </div>
+      <div class="form-group">
+        <label for="ws-desc">Description (optional)</label>
+        <input type="text" id="ws-desc" class="form-input" placeholder="Description">
+      </div>
+    </div>
+    <div class="modal-box__footer">
+      <button class="btn btn--secondary" onclick="Workspace.hideCreateModal()">Cancel</button>
+      <button class="btn btn--primary" onclick="Workspace.saveWorkspace()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Collection Create Modal -->
+<div class="modal-overlay modal-overlay--hidden" id="collection-modal">
+  <div class="modal-box">
+    <div class="modal-box__header">
+      <h2 class="modal-box__title" id="collection-modal-title">New Collection</h2>
+      <button class="modal-box__close" onclick="Collections.hideCreateModal()">×</button>
+    </div>
+    <div class="modal-box__body">
+      <input type="hidden" id="col-parent-id" value="">
+      <div class="form-group">
+        <label for="col-name">Name</label>
+        <input type="text" id="col-name" class="form-input" placeholder="Collection name">
+      </div>
+    </div>
+    <div class="modal-box__footer">
+      <button class="btn btn--secondary" onclick="Collections.hideCreateModal()">Cancel</button>
+      <button class="btn btn--primary" onclick="Collections.saveCollection()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Save Request Modal -->
+<div class="modal-overlay modal-overlay--hidden" id="save-request-modal">
+  <div class="modal-box">
+    <div class="modal-box__header">
+      <h2 class="modal-box__title">Save Request</h2>
+      <button class="modal-box__close" onclick="document.getElementById('save-request-modal').classList.add('modal-overlay--hidden')">×</button>
+    </div>
+    <div class="modal-box__body">
+      <input type="hidden" id="save-req-mode" value="save-current">
+      <input type="hidden" id="save-req-collection-id" value="">
+      <div class="form-group">
+        <label for="save-req-name">Request Name</label>
+        <input type="text" id="save-req-name" class="form-input" placeholder="Request name">
+      </div>
+      <div class="form-group">
+        <label for="save-req-collection-select">Collection</label>
+        <select id="save-req-collection-select" class="form-input" style="appearance:auto;"></select>
+      </div>
+    </div>
+    <div class="modal-box__footer">
+      <button class="btn btn--secondary" onclick="document.getElementById('save-request-modal').classList.add('modal-overlay--hidden')">Cancel</button>
+      <button class="btn btn--primary" onclick="RequestBuilder.confirmSaveRequest()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Environment Editor Modal -->
+<div class="modal-overlay modal-overlay--hidden" id="env-modal">
+  <div class="modal-box modal-box--lg">
+    <div class="modal-box__header">
+      <h2 class="modal-box__title" id="env-modal-title">New Environment</h2>
+      <button class="modal-box__close" onclick="document.getElementById('env-modal').classList.add('modal-overlay--hidden')">×</button>
+    </div>
+    <div class="modal-box__body">
+      <input type="hidden" id="env-edit-id" value="">
+      <div class="form-group">
+        <label for="env-edit-name">Environment Name</label>
+        <input type="text" id="env-edit-name" class="form-input" placeholder="e.g. Production, Staging, Local">
+      </div>
+      <div class="form-group">
+        <label>Variables</label>
+        <table class="env-editor-table">
+          <thead><tr><th>Variable</th><th>Value</th><th style="width:30px;"></th></tr></thead>
+          <tbody id="env-vars-body">
+            <tr>
+              <td><input type="text" placeholder="VARIABLE_NAME"></td>
+              <td><input type="text" placeholder="value"></td>
+              <td class="kv-table__action"><button class="kv-remove-btn" onclick="this.closest('tr').remove()">×</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <button class="kv-add-btn" onclick="Environments.addEnvVar()">+ Add Variable</button>
+      </div>
+    </div>
+    <div class="modal-box__footer">
+      <button class="btn btn--secondary" onclick="document.getElementById('env-modal').classList.add('modal-overlay--hidden')">Cancel</button>
+      <button class="btn btn--primary" onclick="Environments.saveEnvironment()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ═══════════════════════════════ SCRIPTS ═══════════════════════════════ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/htmlmixed/htmlmixed.min.js"></script>
+<!-- Modules (order matters) -->
+<script src="/js/api.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/workspace.js"></script>
+<script src="/js/collections.js"></script>
+<script src="/js/tabs.js"></script>
+<script src="/js/request.js"></script>
+<script src="/js/response.js"></script>
+<script src="/js/environments.js"></script>
+<script src="/js/history.js"></script>
+</body>
+</html>
