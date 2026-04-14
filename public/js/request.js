@@ -297,16 +297,22 @@ const RequestBuilder = (() => {
   }
 
   async function confirmSaveRequest() {
-    const tab = Tabs.getActiveTab();
-    if (!tab) return;
+    let tab = Tabs.getActiveTab();
+    const mode = document.getElementById('save-req-mode').value;
 
-    saveToTab(tab);
+    // If mode is new-blank, we don't need an existing tab
+    if (mode !== 'new-blank') {
+      if (!tab) {
+        Toast.show('No active request tab', 'error');
+        return;
+      }
+      saveToTab(tab);
+    }
 
     const name = document.getElementById('save-req-name').value.trim() || 'Untitled Request';
     const collectionId = parseInt(document.getElementById('save-req-collection-select').value || document.getElementById('save-req-collection-id').value);
-    const mode = document.getElementById('save-req-mode').value;
 
-    if (!collectionId) {
+    if (!collectionId || isNaN(collectionId)) {
       Toast.show('Please select a collection', 'error');
       return;
     }
@@ -314,20 +320,33 @@ const RequestBuilder = (() => {
     try {
       const data = {
         name,
-        method: mode === 'new-blank' ? 'GET' : tab.method,
-        url: mode === 'new-blank' ? '' : tab.url,
-        query: mode === 'new-blank' ? '[]' : JSON.stringify(tab.params),
-        headers: mode === 'new-blank' ? '[]' : JSON.stringify(tab.headers),
-        body: mode === 'new-blank' ? '' : tab.body,
-        bodyType: tab.bodyType || 'raw',
-        auth: JSON.stringify({ type: tab.authType, token: tab.authToken, username: tab.authUsername, password: tab.authPassword }),
+        method: (mode === 'new-blank' || !tab) ? 'GET' : tab.method,
+        url: (mode === 'new-blank' || !tab) ? '' : tab.url,
+        query: (mode === 'new-blank' || !tab) ? '[]' : JSON.stringify(tab.params || []),
+        headers: (mode === 'new-blank' || !tab) ? '[]' : JSON.stringify(tab.headers || []),
+        body: (mode === 'new-blank' || !tab) ? '' : (tab.body || ''),
+        bodyType: tab?.bodyType || 'raw',
+        auth: (mode === 'new-blank' || !tab) ? '{}' : JSON.stringify({ type: tab.authType, token: tab.authToken, username: tab.authUsername, password: tab.authPassword }),
         collectionId,
       };
 
       const saved = await API.requests.create(data);
-      tab.name = name;
-      Tabs.markSaved(saved.id, collectionId);
-      Tabs.updateActiveTabName(name, tab.method);
+
+      // If new-blank, also open the created request in a new tab
+      if (mode === 'new-blank') {
+        Tabs.createTab({
+          name,
+          method: 'GET',
+          url: '',
+          savedRequestId: saved.id,
+          collectionId,
+        });
+      } else if (tab) {
+        tab.name = name;
+        Tabs.markSaved(saved.id, collectionId);
+        Tabs.updateActiveTabName(name, tab.method);
+      }
+
       Collections.load(Workspace.getActiveId());
       document.getElementById('save-request-modal').classList.add('modal-overlay--hidden');
       Toast.show('Request saved', 'success');

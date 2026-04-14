@@ -1703,3 +1703,13 @@ html, body {
   font-size: 12px;
   color: var(--text-secondary);
 }
+.import-preview__badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--accent-glow);
+  color: var(--accent-primary);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}

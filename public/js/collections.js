@@ -11,12 +11,29 @@ const Collections = (() => {
     listEl.innerHTML = '<div class="empty-state"><div class="loading-spinner"></div></div>';
 
     try {
-      collections = await API.collections.listByWorkspace(workspaceId);
+      const raw = await API.collections.listByWorkspace(workspaceId);
+      // Flatten nested children into a flat array so the tree filter works
+      collections = flattenCollections(raw);
       render();
     } catch (err) {
       listEl.innerHTML = `<div class="empty-state"><div class="empty-state__text">Failed to load collections</div></div>`;
       console.error('Failed to load collections:', err);
     }
+  }
+
+  function flattenCollections(cols) {
+    const flat = [];
+    function walk(list) {
+      for (const col of list) {
+        const { children, ...rest } = col;
+        flat.push(rest);
+        if (children && children.length > 0) {
+          walk(children);
+        }
+      }
+    }
+    walk(cols);
+    return flat;
   }
 
   function render() {
@@ -98,7 +115,22 @@ const Collections = (() => {
       const detail = await API.collections.getById(colId);
       const idx = collections.findIndex(c => c.id === colId);
       if (idx !== -1) {
-        collections[idx] = { ...collections[idx], ...detail };
+        // Extract children before merging
+        const { children, ...rest } = detail;
+        collections[idx] = { ...collections[idx], ...rest };
+        // Flatten any new children into the collections array
+        if (children && children.length > 0) {
+          const flattened = flattenCollections(children);
+          for (const child of flattened) {
+            if (!collections.find(c => c.id === child.id)) {
+              collections.push(child);
+            } else {
+              // Update existing
+              const cidx = collections.findIndex(c => c.id === child.id);
+              collections[cidx] = { ...collections[cidx], ...child };
+            }
+          }
+        }
       }
       render();
     } catch (err) {

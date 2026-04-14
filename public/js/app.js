@@ -40,14 +40,26 @@ function showContextMenu(x, y, items) {
   menu.style.left = x + 'px';
   menu.style.top = y + 'px';
 
+  // Stop clicks inside the menu from bubbling to the document dismiss listener
+  menu.addEventListener('click', (e) => e.stopPropagation());
+  menu.addEventListener('contextmenu', (e) => e.stopPropagation());
+
   items.forEach(item => {
     if (item.divider) {
-      menu.innerHTML += '<div class="context-menu__divider"></div>';
+      const div = document.createElement('div');
+      div.className = 'context-menu__divider';
+      menu.appendChild(div);
     } else {
       const btn = document.createElement('button');
       btn.className = `context-menu__item ${item.danger ? 'context-menu__item--danger' : ''}`;
       btn.textContent = item.label;
-      btn.onclick = () => { closeContextMenu(); item.action(); };
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        closeContextMenu();
+        // Delay action slightly to ensure menu is fully removed first
+        setTimeout(() => item.action(), 0);
+      });
       menu.appendChild(btn);
     }
   });
@@ -59,10 +71,16 @@ function showContextMenu(x, y, items) {
   if (rect.right > window.innerWidth) menu.style.left = (x - rect.width) + 'px';
   if (rect.bottom > window.innerHeight) menu.style.top = (y - rect.height) + 'px';
 
+  // Dismiss menu when clicking anywhere outside
+  const dismissHandler = (e) => {
+    if (!menu.contains(e.target)) {
+      closeContextMenu();
+      document.removeEventListener('mousedown', dismissHandler);
+    }
+  };
   setTimeout(() => {
-    document.addEventListener('click', closeContextMenu, { once: true });
-    document.addEventListener('contextmenu', closeContextMenu, { once: true });
-  }, 10);
+    document.addEventListener('mousedown', dismissHandler);
+  }, 50);
 }
 
 function closeContextMenu() {
@@ -232,6 +250,23 @@ const ImportPostman = (() => {
     document.getElementById('import-modal').classList.add('modal-overlay--hidden');
   }
 
+  // Detect Postman format version
+  function detectFormat(data) {
+    if (data.info && data.item) {
+      const schema = data.info.schema || '';
+      if (schema.includes('v2.1')) return { version: 'v2.1', name: data.info.name, items: data.item, desc: data.info.description };
+      if (schema.includes('v2.0')) return { version: 'v2.0', name: data.info.name, items: data.item, desc: data.info.description };
+      return { version: 'v2.x', name: data.info.name, items: data.item, desc: data.info.description };
+    }
+    if (data.requests && Array.isArray(data.requests)) {
+      return { version: 'v1.0', name: data.name || 'Legacy Collection', items: data.requests.map(r => ({ name: r.name, request: r })), desc: data.description };
+    }
+    if (data.collection && data.collection.item) {
+      return { version: 'v2.x', name: data.collection.info?.name || 'Collection', items: data.collection.item, desc: data.collection.info?.description };
+    }
+    return null;
+  }
+
   function handleFile(input) {
     const file = input.files[0];
     if (!file) return;
@@ -246,20 +281,24 @@ const ImportPostman = (() => {
     reader.onload = (e) => {
       try {
         const data = JSON.parse(e.target.result);
-        if (!data.info || !data.item) {
-          Toast.show('Invalid Postman Collection format', 'error');
+        const fmt = detectFormat(data);
+
+        if (!fmt) {
+          Toast.show('Unrecognized Postman format. Expected v1.0, v2.0, or v2.1.', 'error');
           return;
         }
 
         const preview = document.getElementById('import-preview');
-        const reqCount = countRequests(data.item);
-        const folderCount = countFolders(data.item);
+        const reqCount = countRequests(fmt.items);
+        const folderCount = countFolders(fmt.items);
+        const desc = typeof fmt.desc === 'string' ? fmt.desc.substring(0, 120) : '';
 
         preview.innerHTML = `
           <div class="import-preview__card">
-            <div class="import-preview__title">📦 ${escapeHtml(data.info.name)}</div>
+            <div class="import-preview__title">📦 ${escapeHtml(fmt.name)}</div>
             <div class="import-preview__meta">
-              ${data.info.description ? `<div>${escapeHtml(typeof data.info.description === 'string' ? data.info.description.substring(0, 100) : '')}</div>` : ''}
+              <span class="import-preview__badge">${fmt.version}</span>
+              ${desc ? `<div style="margin-top:4px;">${escapeHtml(desc)}</div>` : ''}
               <div style="margin-top:8px; display:flex; gap:16px;">
                 <span>📂 ${folderCount} folders</span>
                 <span>📄 ${reqCount} requests</span>
