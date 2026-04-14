@@ -64,7 +64,7 @@ const Collections = (() => {
 
     return `
       <div class="tree-item" data-collection-id="${col.id}">
-        <div class="tree-item__header" onclick="Collections.toggle(${col.id})" oncontextmenu="Collections.contextMenu(event, ${col.id})">
+        <div class="tree-item__header" role="button" tabindex="0" onclick="Collections.toggle(${col.id})" oncontextmenu="Collections.contextMenu(event, ${col.id})">
           <span class="tree-item__arrow ${isExpanded ? 'tree-item__arrow--expanded' : ''}" ${!hasChildren ? 'style="visibility:hidden"' : ''}>▶</span>
           <span class="tree-item__icon tree-item__icon--folder">📁</span>
           <span class="tree-item__name">${escapeHtml(col.name)}</span>
@@ -88,7 +88,7 @@ const Collections = (() => {
     const methodClass = `method-${method.toLowerCase()}`;
     return `
       <div class="tree-item">
-        <div class="tree-item__header" onclick="Collections.openRequest(${req.id})" oncontextmenu="Collections.requestContextMenu(event, ${req.id}, ${collectionId})">
+        <div class="tree-item__header" role="button" tabindex="0" onclick="Collections.openRequest(${req.id})" oncontextmenu="Collections.requestContextMenu(event, ${req.id}, ${collectionId})">
           <span class="tree-item__arrow" style="visibility:hidden">▶</span>
           <span class="tree-item__icon tree-item__icon--request ${methodClass}">${method.substring(0, 3)}</span>
           <span class="tree-item__name">${escapeHtml(req.name)}</span>
@@ -313,29 +313,32 @@ const Collections = (() => {
   }
 
   // ── Delete ──
-  async function deleteCollection(colId) {
+  function deleteCollection(colId) {
     const col = collections.find(c => c.id === colId);
     const name = col ? col.name : 'this collection';
-    if (!confirm(`Delete "${name}" and all its requests?`)) return;
-    try {
-      await API.collections.delete(colId);
-      expandedFolders.delete(colId);
-      await load(Workspace.getActiveId());
-      Toast.show('Collection deleted', 'success');
-    } catch (err) {
-      Toast.show(err.message, 'error');
-    }
+    
+    ConfirmDialog.show('Delete Collection', `Are you sure you want to delete "${name}" and all of its child folders and requests? This action cannot be undone.`, 'Delete', async () => {
+      try {
+        await API.collections.delete(colId);
+        expandedFolders.delete(colId);
+        await load(Workspace.getActiveId());
+        Toast.show('Collection deleted', 'success');
+      } catch (err) {
+        Toast.show(err.message, 'error');
+      }
+    });
   }
 
-  async function deleteRequest(reqId) {
-    if (!confirm('Delete this request?')) return;
-    try {
-      await API.requests.delete(reqId);
-      await load(Workspace.getActiveId());
-      Toast.show('Request deleted', 'success');
-    } catch (err) {
-      Toast.show(err.message, 'error');
-    }
+  function deleteRequest(reqId) {
+    ConfirmDialog.show('Delete Request', 'Are you sure you want to delete this request? This action cannot be undone.', 'Delete', async () => {
+      try {
+        await API.requests.delete(reqId);
+        await load(Workspace.getActiveId());
+        Toast.show('Request deleted', 'success');
+      } catch (err) {
+        Toast.show(err.message, 'error');
+      }
+    });
   }
 
   async function duplicateRequest(reqId) {

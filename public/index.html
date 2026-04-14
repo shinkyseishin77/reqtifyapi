@@ -7,7 +7,7 @@
     <meta name="description" content="A powerful, full-featured self-hosted API testing tool.">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/darcula.min.css">
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/style.css?v=1.0.1">
 </head>
 <body>
 <script>
@@ -436,9 +436,26 @@
         <input type="text" id="rename-input" class="form-input" placeholder="New name" onkeydown="if(event.key==='Enter') Collections.confirmRename()">
       </div>
     </div>
+    </div>
     <div class="modal-box__footer">
       <button class="btn btn--secondary" onclick="document.getElementById('rename-modal').classList.add('modal-overlay--hidden')">Cancel</button>
       <button class="btn btn--primary" onclick="Collections.confirmRename()">Rename</button>
+    </div>
+  </div>
+</div>
+
+<!-- Custom Confirm Dialog Modal -->
+<div class="modal-overlay modal-overlay--hidden" id="confirm-modal" style="z-index: 3000;">
+  <div class="modal-box" style="max-width: 400px;">
+    <div class="modal-box__header">
+      <h2 class="modal-box__title" id="confirm-modal-title">Confirm Action</h2>
+    </div>
+    <div class="modal-box__body">
+      <p id="confirm-modal-message" style="color: var(--text-primary); font-size: 14px; margin: 0;"></p>
+    </div>
+    <div class="modal-box__footer">
+      <button class="btn btn--secondary" onclick="ConfirmDialog.cancel()">Cancel</button>
+      <button class="btn btn--primary" id="confirm-modal-btn" style="background: var(--danger-color, #e74c3c); border-color: var(--danger-color, #e74c3c);">Confirm</button>
     </div>
   </div>
 </div>
@@ -541,15 +558,15 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/xml/xml.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/htmlmixed/htmlmixed.min.js"></script>
 <!-- Modules (order matters) -->
-<script src="/js/api.js"></script>
-<script src="/js/app.js"></script>
-<script src="/js/auth.js"></script>
-<script src="/js/workspace.js"></script>
-<script src="/js/collections.js"></script>
-<script src="/js/tabs.js"></script>
-<script src="/js/request.js"></script>
-<script src="/js/response.js"></script>
-<script src="/js/environments.js"></script>
-<script src="/js/history.js"></script>
+<script src="/js/api.js?v=1.0.1"></script>
+<script src="/js/app.js?v=1.0.1"></script>
+<script src="/js/auth.js?v=1.0.1"></script>
+<script src="/js/workspace.js?v=1.0.1"></script>
+<script src="/js/collections.js?v=1.0.1"></script>
+<script src="/js/tabs.js?v=1.0.1"></script>
+<script src="/js/request.js?v=1.0.1"></script>
+<script src="/js/response.js?v=1.0.1"></script>
+<script src="/js/environments.js?v=1.0.1"></script>
+<script src="/js/history.js?v=1.0.1"></script>
 </body>
 </html>

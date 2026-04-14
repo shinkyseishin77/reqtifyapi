@@ -33,7 +33,15 @@ const API = (() => {
     }
 
     const res = await fetch(url, config);
-    const json = await res.json();
+
+    // Safely parse JSON - handle empty body or non-JSON responses
+    let json;
+    try {
+      const text = await res.text();
+      json = text ? JSON.parse(text) : {};
+    } catch (e) {
+      json = {};
+    }
 
     if (res.status === 401) {
       // Don't clear token for auth/me checks - let auth.js handle it
@@ -48,7 +56,7 @@ const API = (() => {
       throw new Error(json.message || `HTTP ${res.status}`);
     }
 
-    return json.data;
+    return json.data !== undefined ? json.data : json;
   }
 
   return {

@@ -31,7 +31,42 @@ const Toast = (() => {
 })();
 window.Toast = Toast;
 
+// ── Custom Confirm Dialog ──
+const ConfirmDialog = (() => {
+  let onConfirmCallback = null;
+
+  function show(title, message, confirmBtnText, onConfirm) {
+    document.getElementById('confirm-modal-title').textContent = title;
+    document.getElementById('confirm-modal-message').textContent = message;
+    
+    const btn = document.getElementById('confirm-modal-btn');
+    btn.textContent = confirmBtnText;
+
+    onConfirmCallback = onConfirm;
+    
+    // Clear old click listener and add new one
+    btn.onclick = () => {
+      document.getElementById('confirm-modal').classList.add('modal-overlay--hidden');
+      if (typeof onConfirmCallback === 'function') {
+        onConfirmCallback();
+      }
+    };
+
+    document.getElementById('confirm-modal').classList.remove('modal-overlay--hidden');
+  }
+
+  function cancel() {
+    document.getElementById('confirm-modal').classList.add('modal-overlay--hidden');
+    onConfirmCallback = null;
+  }
+
+  return { show, cancel };
+})();
+window.ConfirmDialog = ConfirmDialog;
+
 // ── Context Menu ──
+let _ctxDismissHandler = null;
+
 function showContextMenu(x, y, items) {
   closeContextMenu();
   const menu = document.createElement('div');
@@ -39,10 +74,6 @@ function showContextMenu(x, y, items) {
   menu.id = 'active-context-menu';
   menu.style.left = x + 'px';
   menu.style.top = y + 'px';
-
-  // Stop clicks inside the menu from bubbling to the document dismiss listener
-  menu.addEventListener('click', (e) => e.stopPropagation());
-  menu.addEventListener('contextmenu', (e) => e.stopPropagation());
 
   items.forEach(item => {
     if (item.divider) {
@@ -53,12 +84,25 @@ function showContextMenu(x, y, items) {
       const btn = document.createElement('button');
       btn.className = `context-menu__item ${item.danger ? 'context-menu__item--danger' : ''}`;
       btn.textContent = item.label;
+      btn.addEventListener('mousedown', (e) => {
+        // Prevent the dismiss handler from firing
+        e.stopPropagation();
+      });
+      btn.addEventListener('touchstart', (e) => {
+        // Prevent on mobile devices as well
+        e.stopPropagation();
+      }, { passive: true });
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
+        // Remove dismiss handler first, then close menu, then run action
+        if (_ctxDismissHandler) {
+          document.removeEventListener('mousedown', _ctxDismissHandler);
+          _ctxDismissHandler = null;
+        }
         closeContextMenu();
-        // Delay action slightly to ensure menu is fully removed first
-        setTimeout(() => item.action(), 0);
+        // Call action directly - don't defer with setTimeout!
+        item.action();
       });
       menu.appendChild(btn);
     }
@@ -72,18 +116,24 @@ function showContextMenu(x, y, items) {
   if (rect.bottom > window.innerHeight) menu.style.top = (y - rect.height) + 'px';
 
   // Dismiss menu when clicking anywhere outside
-  const dismissHandler = (e) => {
-    if (!menu.contains(e.target)) {
+  _ctxDismissHandler = (e) => {
+    const activeMenu = document.getElementById('active-context-menu');
+    if (!activeMenu || !activeMenu.contains(e.target)) {
       closeContextMenu();
-      document.removeEventListener('mousedown', dismissHandler);
     }
   };
   setTimeout(() => {
-    document.addEventListener('mousedown', dismissHandler);
+    document.addEventListener('mousedown', _ctxDismissHandler);
+    document.addEventListener('touchstart', _ctxDismissHandler, { passive: true });
   }, 50);
 }
 
 function closeContextMenu() {
+  if (_ctxDismissHandler) {
+    document.removeEventListener('mousedown', _ctxDismissHandler);
+    document.removeEventListener('touchstart', _ctxDismissHandler);
+    _ctxDismissHandler = null;
+  }
   const menu = document.getElementById('active-context-menu');
   if (menu) menu.remove();
 }
@@ -125,19 +175,20 @@ function initSplitter() {
   let isDragging = false;
   let startY, startRequestHeight;
 
-  splitter.addEventListener('mousedown', (e) => {
+  function startDrag(clientY, e) {
     isDragging = true;
-    startY = e.clientY;
+    startY = clientY;
     startRequestHeight = requestPane.offsetHeight;
     splitter.classList.add('splitter--active');
     document.body.style.cursor = 'row-resize';
     document.body.style.userSelect = 'none';
-    e.preventDefault();
-  });
+    document.body.style.webkitUserSelect = 'none';
+    if (e) e.preventDefault();
+  }
 
-  document.addEventListener('mousemove', (e) => {
+  function doDrag(clientY) {
     if (!isDragging) return;
-    const delta = e.clientY - startY;
+    const delta = clientY - startY;
     const newHeight = Math.max(120, Math.min(startRequestHeight + delta, window.innerHeight - 250));
     requestPane.style.flex = 'none';
     requestPane.style.height = newHeight + 'px';
@@ -148,16 +199,35 @@ function initSplitter() {
     const resEd = ResponseViewer.getEditor();
     if (reqEd) reqEd.refresh();
     if (resEd) resEd.refresh();
-  });
+  }
 
-  document.addEventListener('mouseup', () => {
+  function endDrag() {
     if (isDragging) {
       isDragging = false;
       splitter.classList.remove('splitter--active');
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
+      document.body.style.webkitUserSelect = '';
     }
-  });
+  }
+
+  // Mouse events
+  splitter.addEventListener('mousedown', (e) => startDrag(e.clientY, e));
+  document.addEventListener('mousemove', (e) => doDrag(e.clientY));
+  document.addEventListener('mouseup', endDrag);
+
+  // Touch events (mobile/tablet support)
+  splitter.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) startDrag(e.touches[0].clientY, e);
+  }, { passive: false });
+  document.addEventListener('touchmove', (e) => {
+    if (isDragging && e.touches.length === 1) doDrag(e.touches[0].clientY);
+  }, { passive: true });
+  document.addEventListener('touchend', endDrag);
+  document.addEventListener('touchcancel', endDrag);
+
+  // Clean up stuck drag state if mouse leaves the window
+  window.addEventListener('blur', endDrag);
 }
 
 // ── Keyboard Shortcuts ──
