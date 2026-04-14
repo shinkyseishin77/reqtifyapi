@@ -42,8 +42,14 @@ const login = async (req, res, next) => {
 };
 
 const getMe = async (req, res, next) => {
-  // `req.user` is set in authMiddleware, here just returning the basic info
-  return success(res, { id: req.user.id, role: req.user.role }, 'User profile retrieved');
+  try {
+    const AuthRepository = require('../repositories/AuthRepository');
+    const user = await AuthRepository.findUserById(req.user.id);
+    if (!user) return error(res, 'User not found', 404);
+    return success(res, { id: user.id, name: user.name, email: user.email, role: user.role }, 'User profile retrieved');
+  } catch (err) {
+    next(err);
+  }
 }
 
 module.exports = {

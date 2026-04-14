@@ -10,9 +10,16 @@
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
+<script>
+  // Pre-check: If token exists, hide auth modal and show app immediately to prevent flash
+  (function() {
+    var hasToken = !!localStorage.getItem('pm_token');
+    document.documentElement.setAttribute('data-auth', hasToken ? 'yes' : 'no');
+  })();
+</script>
 
 <!-- ═══════════════════════════════ AUTH MODAL ═══════════════════════════════ -->
-<div class="modal-overlay" id="auth-modal">
+<div class="modal-overlay modal-overlay--hidden" id="auth-modal">
   <div class="modal-box">
     <div class="modal-box__header">
       <h1 class="modal-box__title" id="auth-modal-title">Welcome Back</h1>
@@ -77,8 +84,11 @@
     <div class="topbar__spacer"></div>
 
     <!-- User Menu -->
-    <div class="topbar__user" onclick="Auth.logout()" title="Logout">
-      <div class="topbar__avatar">U</div>
+    <div class="topbar__user" title="Logged in">
+      <div class="topbar__avatar" id="user-avatar">U</div>
+      <span id="user-display-name">User</span>
+    </div>
+    <div class="topbar__user" onclick="Auth.logout()" title="Logout" style="color:var(--method-delete);">
       <span>Logout</span>
     </div>
   </header>
@@ -306,7 +316,7 @@
 
 <!-- ═══════════════════════════════ MODALS ═══════════════════════════════ -->
 
-<!-- Workspace Create Modal -->
+<!-- Workspace Create/Edit Modal -->
 <div class="modal-overlay modal-overlay--hidden" id="workspace-modal">
   <div class="modal-box">
     <div class="modal-box__header">
@@ -314,6 +324,7 @@
       <button class="modal-box__close" onclick="Workspace.hideCreateModal()">×</button>
     </div>
     <div class="modal-box__body">
+      <input type="hidden" id="ws-edit-id" value="">
       <div class="form-group">
         <label for="ws-name">Name</label>
         <input type="text" id="ws-name" class="form-input" placeholder="Workspace name">
@@ -330,6 +341,52 @@
   </div>
 </div>
 
+<!-- Members Management Modal -->
+<div class="modal-overlay modal-overlay--hidden" id="members-modal">
+  <div class="modal-box modal-box--lg">
+    <div class="modal-box__header">
+      <h2 class="modal-box__title">👥 Members — <span id="members-ws-name"></span></h2>
+      <button class="modal-box__close" onclick="Workspace.hideMembersModal()">×</button>
+    </div>
+    <div class="modal-box__body">
+      <!-- Invite Form -->
+      <div style="display:flex; gap:8px; margin-bottom:16px; align-items:flex-end;">
+        <div style="flex:1;">
+          <label style="font-size:11px; font-weight:500; color:var(--text-secondary); display:block; margin-bottom:4px;">Invite by Email</label>
+          <input type="email" id="invite-email" class="form-input" placeholder="colleague@email.com">
+        </div>
+        <div>
+          <label style="font-size:11px; font-weight:500; color:var(--text-secondary); display:block; margin-bottom:4px;">Role</label>
+          <select id="invite-role" class="form-input" style="appearance:auto; min-width:100px;">
+            <option value="viewer">Viewer</option>
+            <option value="editor">Editor</option>
+          </select>
+        </div>
+        <button class="btn btn--primary btn--sm" onclick="Workspace.inviteMember()" style="white-space:nowrap;">Invite</button>
+      </div>
+
+      <!-- Members List -->
+      <div style="border:1px solid var(--border-secondary); border-radius:var(--radius-md); overflow:hidden;">
+        <table style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border-secondary);">
+              <th style="text-align:left; padding:8px; font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase;">User</th>
+              <th style="text-align:left; padding:8px; font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; width:120px;">Role</th>
+              <th style="padding:8px; width:80px;"></th>
+            </tr>
+          </thead>
+          <tbody id="members-list"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-box__footer">
+      <button class="btn btn--danger btn--sm" onclick="Workspace.deleteWorkspace()">Delete Workspace</button>
+      <div style="flex:1;"></div>
+      <button class="btn btn--secondary" onclick="Workspace.hideMembersModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Collection Create Modal -->
 <div class="modal-overlay modal-overlay--hidden" id="collection-modal">
   <div class="modal-box">
@@ -339,14 +396,37 @@
     </div>
     <div class="modal-box__body">
       <input type="hidden" id="col-parent-id" value="">
+      <input type="hidden" id="col-edit-id" value="">
       <div class="form-group">
         <label for="col-name">Name</label>
-        <input type="text" id="col-name" class="form-input" placeholder="Collection name">
+        <input type="text" id="col-name" class="form-input" placeholder="Collection name" onkeydown="if(event.key==='Enter') Collections.saveCollection()">
       </div>
     </div>
     <div class="modal-box__footer">
       <button class="btn btn--secondary" onclick="Collections.hideCreateModal()">Cancel</button>
-      <button class="btn btn--primary" onclick="Collections.saveCollection()">Create</button>
+      <button class="btn btn--primary" onclick="Collections.saveCollection()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rename Modal (generic for requests) -->
+<div class="modal-overlay modal-overlay--hidden" id="rename-modal">
+  <div class="modal-box">
+    <div class="modal-box__header">
+      <h2 class="modal-box__title" id="rename-modal-title">Rename</h2>
+      <button class="modal-box__close" onclick="document.getElementById('rename-modal').classList.add('modal-overlay--hidden')">×</button>
+    </div>
+    <div class="modal-box__body">
+      <input type="hidden" id="rename-target-id" value="">
+      <input type="hidden" id="rename-target-type" value="">
+      <div class="form-group">
+        <label for="rename-input">Name</label>
+        <input type="text" id="rename-input" class="form-input" placeholder="New name" onkeydown="if(event.key==='Enter') Collections.confirmRename()">
+      </div>
+    </div>
+    <div class="modal-box__footer">
+      <button class="btn btn--secondary" onclick="document.getElementById('rename-modal').classList.add('modal-overlay--hidden')">Cancel</button>
+      <button class="btn btn--primary" onclick="Collections.confirmRename()">Rename</button>
     </div>
   </div>
 </div>

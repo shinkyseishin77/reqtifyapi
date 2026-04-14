@@ -23,32 +23,29 @@ const Tabs = (() => {
       savedRequestId: data.savedRequestId || null,
       collectionId: data.collectionId || null,
       unsaved: !data.savedRequestId,
-      // Response state
       response: null,
     };
 
     // Parse saved data
     if (data.query) {
-      try { tab.params = JSON.parse(data.query); } catch(e) { tab.params = []; }
+      try { tab.params = typeof data.query === 'string' ? JSON.parse(data.query) : data.query; } catch(e) { tab.params = []; }
     }
-    if (data.headers) {
-      try { tab.headers = JSON.parse(data.headers); } catch(e) { tab.headers = []; }
+    if (data.headers && typeof data.headers !== 'object') {
+      try { tab.headers = typeof data.headers === 'string' ? JSON.parse(data.headers) : data.headers; } catch(e) { tab.headers = []; }
+    } else if (Array.isArray(data.headers)) {
+      tab.headers = data.headers;
     }
     if (data.auth) {
       try {
-        const a = JSON.parse(data.auth);
+        const a = typeof data.auth === 'string' ? JSON.parse(data.auth) : data.auth;
         tab.authType = a.type || 'none';
         tab.authToken = a.token || '';
         tab.authUsername = a.username || '';
         tab.authPassword = a.password || '';
       } catch(e) {}
     }
-    if (data.body) {
-      tab.body = data.body;
-    }
-    if (data.bodyType) {
-      tab.bodyType = data.bodyType;
-    }
+    if (data.body) tab.body = data.body;
+    if (data.bodyType) tab.bodyType = data.bodyType;
 
     tabs.push(tab);
     activateTab(tab.id);
@@ -63,7 +60,6 @@ const Tabs = (() => {
       activateTab(existing.id);
       return;
     }
-
     createTab({
       name: req.name,
       method: req.method,
@@ -80,8 +76,9 @@ const Tabs = (() => {
 
   function activateTab(tabId) {
     // Save current tab state before switching
-    if (activeTabId) {
-      saveCurrentTabState();
+    const currentTab = tabs.find(t => t.id === activeTabId);
+    if (currentTab) {
+      try { RequestBuilder.saveToTab(currentTab); } catch(e) {}
     }
     activeTabId = tabId;
     renderTabBar();
@@ -92,10 +89,12 @@ const Tabs = (() => {
     const idx = tabs.findIndex(t => t.id === tabId);
     if (idx === -1) return;
 
+    const wasActive = (activeTabId === tabId);
     tabs.splice(idx, 1);
 
-    if (activeTabId === tabId) {
+    if (wasActive) {
       if (tabs.length > 0) {
+        // Activate the nearest tab (prefer left, then right)
         const newIdx = Math.min(idx, tabs.length - 1);
         activeTabId = tabs[newIdx].id;
       } else {
@@ -104,12 +103,16 @@ const Tabs = (() => {
     }
 
     renderTabBar();
-    if (activeTabId) {
-      restoreTabState();
-    } else {
-      RequestBuilder.clear();
-      ResponseViewer.clear();
-      showWelcome(true);
+
+    if (wasActive) {
+      if (activeTabId) {
+        restoreTabState();
+      } else {
+        // No tabs left — show welcome, clear editors
+        try { RequestBuilder.clear(); } catch(e) {}
+        try { ResponseViewer.clear(); } catch(e) {}
+        showWelcome(true);
+      }
     }
   }
 
@@ -118,15 +121,18 @@ const Tabs = (() => {
     if (!bar) return;
 
     const tabsHtml = tabs.map(tab => {
-      const methodClass = `method-${tab.method.toLowerCase()}`;
+      const methodClass = `method-${(tab.method || 'GET').toLowerCase()}`;
       const isActive = tab.id === activeTabId;
+      const displayName = tab.name || 'Untitled';
+      const shortName = displayName.length > 25 ? displayName.substring(0, 25) + '…' : displayName;
+
       return `
         <button class="tab-bar__item ${isActive ? 'tab-bar__item--active' : ''} ${tab.unsaved ? 'tab-bar__item--unsaved' : ''}"
                 onclick="Tabs.activateTab(${tab.id})" 
-                title="${escapeHtml(tab.name)}">
-          <span class="tab-bar__method ${methodClass}">${tab.method}</span>
-          <span class="tab-bar__name">${escapeHtml(tab.name)}</span>
-          <button class="tab-bar__close" onclick="event.stopPropagation(); Tabs.closeTab(${tab.id})">×</button>
+                title="${escapeHtml(displayName)}">
+          <span class="tab-bar__method ${methodClass}">${tab.method || 'GET'}</span>
+          <span class="tab-bar__name">${escapeHtml(shortName)}</span>
+          <span class="tab-bar__close" onclick="event.stopPropagation(); Tabs.closeTab(${tab.id})">×</span>
         </button>
       `;
     }).join('');
@@ -141,10 +147,8 @@ const Tabs = (() => {
   function showWelcome(show) {
     const welcome = document.getElementById('welcome-screen');
     const requestPane = document.getElementById('request-pane');
-    if (welcome && requestPane) {
-      welcome.classList.toggle('hidden', !show);
-      requestPane.classList.toggle('hidden', show);
-    }
+    if (welcome) welcome.classList.toggle('hidden', !show);
+    if (requestPane) requestPane.classList.toggle('hidden', show);
   }
 
   function newTab() {
@@ -158,24 +162,28 @@ const Tabs = (() => {
   function saveCurrentTabState() {
     const tab = getActiveTab();
     if (!tab) return;
-    RequestBuilder.saveToTab(tab);
+    try { RequestBuilder.saveToTab(tab); } catch(e) {}
   }
 
   function restoreTabState() {
     const tab = getActiveTab();
     if (!tab) return;
     showWelcome(false);
-    RequestBuilder.loadFromTab(tab);
-    if (tab.response) {
-      ResponseViewer.display(tab.response);
-    } else {
-      ResponseViewer.clear();
+    try {
+      RequestBuilder.loadFromTab(tab);
+      if (tab.response) {
+        ResponseViewer.display(tab.response);
+      } else {
+        ResponseViewer.clear();
+      }
+    } catch(e) {
+      console.error('Error restoring tab state:', e);
     }
   }
 
   function markUnsaved() {
     const tab = getActiveTab();
-    if (tab) {
+    if (tab && !tab.unsaved) {
       tab.unsaved = true;
       renderTabBar();
     }

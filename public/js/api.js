@@ -36,8 +36,11 @@ const API = (() => {
     const json = await res.json();
 
     if (res.status === 401) {
-      localStorage.removeItem('pm_token');
-      window.dispatchEvent(new Event('auth:required'));
+      // Don't clear token for auth/me checks - let auth.js handle it
+      if (!path.includes('/auth/me')) {
+        localStorage.removeItem('pm_token');
+        window.dispatchEvent(new Event('auth:required'));
+      }
       throw new Error('Session expired');
     }
 
@@ -52,6 +55,7 @@ const API = (() => {
     auth: {
       login: (email, password) => request('POST', '/auth/login', { email, password }),
       register: (email, password, name) => request('POST', '/auth/register', { email, password, name }),
+      getMe: () => request('GET', '/auth/me'),
     },
     workspaces: {
       list: () => request('GET', '/workspaces'),
@@ -60,6 +64,8 @@ const API = (() => {
       update: (id, data) => request('PUT', `/workspaces/${id}`, data),
       delete: (id) => request('DELETE', `/workspaces/${id}`),
       addMember: (id, data) => request('POST', `/workspaces/${id}/members`, data),
+      updateMemberRole: (id, data) => request('PUT', `/workspaces/${id}/members`, data),
+      removeMember: (wsId, userId) => request('DELETE', `/workspaces/${wsId}/members/${userId}`),
     },
     collections: {
       listByWorkspace: (wsId) => request('GET', `/collections/workspace/${wsId}`),

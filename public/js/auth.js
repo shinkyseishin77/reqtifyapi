@@ -1,20 +1,54 @@
 /**
- * Auth Module - Login/Register handling
+ * Auth Module - Login/Register handling with session persistence
  */
 const Auth = (() => {
   let currentUser = null;
 
-  function init() {
+  async function init() {
     const token = localStorage.getItem('pm_token');
-    if (!token) {
-      showLoginModal();
-    } else {
-      onAuthenticated();
-    }
 
+    // Register auth listener first
     window.addEventListener('auth:required', () => {
+      currentUser = null;
       showLoginModal();
     });
+
+    if (!token) {
+      showLoginModal();
+      return;
+    }
+
+    // Token exists — show app immediately, then verify in background
+    const cachedUser = localStorage.getItem('pm_user');
+    if (cachedUser) {
+      try { currentUser = JSON.parse(cachedUser); } catch(e) {}
+    }
+    document.getElementById('app-layout').classList.remove('hidden');
+    updateUserUI();
+
+    // Verify token is still valid
+    try {
+      currentUser = await API.auth.getMe();
+      localStorage.setItem('pm_user', JSON.stringify(currentUser));
+      updateUserUI();
+      Workspace.init();
+    } catch (err) {
+      console.warn('Token validation failed:', err.message);
+      if (err.message === 'Session expired') {
+        // Token truly invalid
+        localStorage.removeItem('pm_token');
+        localStorage.removeItem('pm_user');
+        currentUser = null;
+        showLoginModal();
+      } else {
+        // Network error — use cached data and still load app
+        if (currentUser) {
+          Workspace.init();
+        } else {
+          showLoginModal();
+        }
+      }
+    }
   }
 
   function showLoginModal() {
@@ -39,6 +73,14 @@ const Auth = (() => {
       return;
     }
 
+    if (mode === 'register') {
+      const name = document.getElementById('auth-name').value.trim();
+      if (!name) {
+        errorEl.textContent = 'Name is required';
+        return;
+      }
+    }
+
     const btn = document.getElementById(`auth-${mode}-btn`);
     const origText = btn.textContent;
     btn.disabled = true;
@@ -49,10 +91,15 @@ const Auth = (() => {
       if (mode === 'login') {
         result = await API.auth.login(email, password);
       } else {
-        const name = document.getElementById('auth-name').value.trim() || 'User';
+        const name = document.getElementById('auth-name').value.trim();
         result = await API.auth.register(email, password, name);
       }
+      
+      // Save token and user info
       localStorage.setItem('pm_token', result.token);
+      currentUser = result.user;
+      localStorage.setItem('pm_user', JSON.stringify(currentUser));
+      
       hideLoginModal();
       onAuthenticated();
     } catch (err) {
@@ -65,18 +112,37 @@ const Auth = (() => {
 
   function onAuthenticated() {
     document.getElementById('app-layout').classList.remove('hidden');
-    // Initialize other modules
+    updateUserUI();
     Workspace.init();
+  }
+
+  function updateUserUI() {
+    const avatarEl = document.getElementById('user-avatar');
+    const nameEl = document.getElementById('user-display-name');
+    
+    if (currentUser) {
+      const initials = (currentUser.name || currentUser.email || 'U')
+        .split(' ')
+        .map(w => w[0])
+        .join('')
+        .toUpperCase()
+        .substring(0, 2);
+      
+      if (avatarEl) avatarEl.textContent = initials;
+      if (nameEl) nameEl.textContent = currentUser.name || currentUser.email;
+    }
   }
 
   function logout() {
     localStorage.removeItem('pm_token');
+    localStorage.removeItem('pm_user');
     localStorage.removeItem('pm_workspace');
+    localStorage.removeItem('pm_env');
+    currentUser = null;
     location.reload();
   }
 
   function toggleAuthMode() {
-    const loginFields = document.getElementById('auth-login-fields');
     const registerFields = document.getElementById('auth-register-fields');
     const loginBtn = document.getElementById('auth-login-btn');
     const registerBtn = document.getElementById('auth-register-btn');
@@ -84,23 +150,25 @@ const Auth = (() => {
     const toggleLink = document.getElementById('auth-toggle');
 
     if (registerFields.classList.contains('hidden')) {
-      // Switch to register mode
       registerFields.classList.remove('hidden');
       loginBtn.classList.add('hidden');
       registerBtn.classList.remove('hidden');
       title.textContent = 'Create Account';
-      toggleLink.innerHTML = 'Already have an account? <a href="#" onclick="Auth.toggleAuthMode(); return false;">Login</a>';
+      toggleLink.innerHTML = 'Already have an account? <a href="#" onclick="Auth.toggleAuthMode(); return false;" style="color:var(--accent-primary);">Login</a>';
     } else {
-      // Switch to login mode
       registerFields.classList.add('hidden');
       loginBtn.classList.remove('hidden');
       registerBtn.classList.add('hidden');
       title.textContent = 'Welcome Back';
-      toggleLink.innerHTML = 'Don\'t have an account? <a href="#" onclick="Auth.toggleAuthMode(); return false;">Register</a>';
+      toggleLink.innerHTML = 'Don\'t have an account? <a href="#" onclick="Auth.toggleAuthMode(); return false;" style="color:var(--accent-primary);">Register</a>';
     }
   }
 
-  return { init, handleSubmit, logout, toggleAuthMode, showLoginModal };
+  function getUser() {
+    return currentUser;
+  }
+
+  return { init, handleSubmit, logout, toggleAuthMode, showLoginModal, getUser };
 })();
 
 window.Auth = Auth;

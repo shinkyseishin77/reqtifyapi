@@ -234,6 +234,8 @@ const RequestBuilder = (() => {
 
       Tabs.setResponse(responseData);
       ResponseViewer.display(responseData);
+      // Refresh history in sidebar
+      History.load(Workspace.getActiveId());
     } catch (err) {
       ResponseViewer.displayError(err.message);
     } finally {

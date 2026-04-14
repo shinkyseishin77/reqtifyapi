@@ -84,6 +84,19 @@ function switchSidebarTab(tabName) {
 }
 window.switchSidebarTab = switchSidebarTab;
 
+// ── Collection Search Filter ──
+function filterCollections(query) {
+  const items = document.querySelectorAll('#collection-list .tree-item');
+  const q = query.toLowerCase().trim();
+  items.forEach(item => {
+    const name = item.querySelector('.tree-item__name');
+    if (!name) return;
+    const match = !q || name.textContent.toLowerCase().includes(q);
+    item.style.display = match ? '' : 'none';
+  });
+}
+window.filterCollections = filterCollections;
+
 // ── Splitter (Resizable Panels) ──
 function initSplitter() {
   const splitter = document.getElementById('pane-splitter');
