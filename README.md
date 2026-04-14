@@ -1,4 +1,4 @@
-# ⚡ ApiFlare
+# ⚡ ReqtifyApi
 
 Aplikasi web self-hosted untuk testing API. Mendukung multi-user, workspace kolaborasi, dan UI premium dark theme.
 
@@ -134,7 +134,7 @@ docker-compose up -d
 ```
 
 Ini akan menjalankan:
-- **ApiFlare** di port `3000`
+- **ReqtifyApi** di port `3000`
 - **MySQL** di port `3307`
 
 ---
@@ -286,5 +286,5 @@ ISC
 ---
 
 <p align="center">
-  Built with ⚡ <strong>ApiFlare</strong>
+  Built with ⚡ <strong>ReqtifyApi</strong>
 </p>
